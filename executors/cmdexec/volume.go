@@ -478,6 +478,7 @@ func (s *CmdExecutor) waitVolumeRemoveBrickStatus(host string, command string) (
 			if err == nil {
 				break
 			}
+			time.Sleep(removeBrickStatusPollInterval)
 		}
 		if err != nil {
 			return "", err
