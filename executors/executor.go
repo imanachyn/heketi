@@ -25,6 +25,8 @@ type Executor interface {
 	VolumeDestroyCheck(host, volume string) error
 	VolumeExpand(host string, volume *VolumeRequest) (*Volume, error)
 	VolumeReplaceBrick(host string, volume string, oldBrick *BrickInfo, newBrick *BrickInfo) error
+	VolumeAddBrick(host string, volume string, brick *BrickInfo) error
+	VolumeRemoveBrick(host string, volume string, brick *BrickInfo, replica int) error
 	VolumeInfo(host string, volume string) (*Volume, error)
 	VolumeClone(host string, vsr *VolumeCloneRequest) (*Volume, error)
 	VolumeSnapshot(host string, vsr *VolumeSnapshotRequest) (*Snapshot, error)

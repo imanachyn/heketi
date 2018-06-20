@@ -27,6 +27,8 @@ type MockExecutor struct {
 	MockVolumeDestroy            func(host string, volume string) error
 	MockVolumeDestroyCheck       func(host, volume string) error
 	MockVolumeReplaceBrick       func(host string, volume string, oldBrick *executors.BrickInfo, newBrick *executors.BrickInfo) error
+	MockVolumeAddBrick           func(host string, volume string, brick *executors.BrickInfo) error
+	MockVolumeRemoveBrick        func(host string, volume string, brick *executors.BrickInfo, replica int) error
 	MockVolumeInfo               func(host string, volume string) (*executors.Volume, error)
 	MockVolumeClone              func(host string, volume *executors.VolumeCloneRequest) (*executors.Volume, error)
 	MockVolumeSnapshot           func(host string, volume *executors.VolumeSnapshotRequest) (*executors.Snapshot, error)
@@ -93,6 +95,14 @@ func NewMockExecutor() (*MockExecutor, error) {
 	}
 
 	m.MockVolumeReplaceBrick = func(host string, volume string, oldBrick *executors.BrickInfo, newBrick *executors.BrickInfo) error {
+		return nil
+	}
+
+	m.MockVolumeAddBrick = func(host string, volume string, brick *executors.BrickInfo) error {
+		return nil
+	}
+
+	m.MockVolumeRemoveBrick = func(host string, volume string, brick *executors.BrickInfo, replica int) error {
 		return nil
 	}
 
@@ -235,6 +245,14 @@ func (m *MockExecutor) VolumeDestroyCheck(host string, volume string) error {
 
 func (m *MockExecutor) VolumeReplaceBrick(host string, volume string, oldBrick *executors.BrickInfo, newBrick *executors.BrickInfo) error {
 	return m.MockVolumeReplaceBrick(host, volume, oldBrick, newBrick)
+}
+
+func (m *MockExecutor) VolumeAddBrick(host string, volume string, brick *executors.BrickInfo) error {
+	return m.MockVolumeAddBrick(host, volume, brick)
+}
+
+func (m *MockExecutor) VolumeRemoveBrick(host string, volume string, brick *executors.BrickInfo, replica int) error {
+	return m.MockVolumeRemoveBrick(host, volume, brick, replica)
 }
 
 func (m *MockExecutor) VolumeInfo(host string, volume string) (*executors.Volume, error) {

@@ -1646,9 +1646,7 @@ func TestDeviceRemoveOperationTooFewDevices(t *testing.T) {
 	}
 
 	err = dro.Exec(app.executor)
-	tests.Assert(t, strings.Contains(err.Error(), ErrNoReplacement.Error()),
-		"expected strings.Contains(err.Error(), ErrNoReplacement.Error()), got:",
-		err.Error())
+	tests.Assert(t, err == nil, "expected err == nil, got:", err)
 
 	// operation is not over. we should still have a pending op
 	err = app.db.View(func(tx *bolt.Tx) error {
@@ -1676,8 +1674,8 @@ func TestDeviceRemoveOperationTooFewDevices(t *testing.T) {
 	})
 	// our d should be in the original state because the exec failed
 	tests.Assert(t, err == nil, "expected err == nil, got:", err)
-	tests.Assert(t, len(d.Bricks) > 0,
-		"expected len(d.Bricks) > 0, got:", len(d.Bricks))
+	tests.Assert(t, len(d.Bricks) == 0,
+		"expected len(d.Bricks) == 0, got:", len(d.Bricks))
 	tests.Assert(t, d.State == api.EntryStateOffline)
 }
 

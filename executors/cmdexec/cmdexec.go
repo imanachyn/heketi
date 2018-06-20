@@ -42,7 +42,7 @@ func (s *CmdExecutor) AccessConnection(host string) {
 
 	s.Lock.Lock()
 	if c, ok = s.Throttlemap[host]; !ok {
-		c = make(chan bool, 1)
+		c = make(chan bool, 10)
 		s.Throttlemap[host] = c
 	}
 	s.Lock.Unlock()

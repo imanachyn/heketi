@@ -908,9 +908,7 @@ func TestDeviceSetStateFailedTooFewDevices(t *testing.T) {
 	}
 
 	err = d.SetState(app.db, app.executor, api.EntryStateFailed)
-	tests.Assert(t, strings.Contains(err.Error(), ErrNoReplacement.Error()),
-		"expected strings.Contains(err.Error(), ErrNoReplacement.Error()), got:",
-		err.Error())
+	tests.Assert(t, err == nil, "expected err == nil, got:", err)
 }
 
 func mockVolumeInfoFromDb(db *bolt.DB, volume string) (*executors.Volume, error) {

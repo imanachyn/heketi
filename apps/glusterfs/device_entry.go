@@ -478,6 +478,9 @@ func (d *DeviceEntry) removeBricksFromDevice(db wdb.DB,
 		}
 		logger.Info("Replacing brick %v on device %v on node %v", brickEntry.Id(), d.Id(), d.NodeId)
 		err = volumeEntry.replaceBrickInVolume(db, executor, brickEntry.Id())
+		if err == ErrNoReplacement {
+			err = volumeEntry.removeBrickFromVolume(db, executor, brickEntry.Id())
+		}
 		if err != nil {
 			return logger.Err(fmt.Errorf("Failed to remove device, error: %v", err))
 		}
