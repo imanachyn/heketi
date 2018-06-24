@@ -26,8 +26,9 @@ const (
 	removeBrickStatusCompleted  = "completed"
 	removeBrickStatusFailed     = "failed"
 
-	removeBrickStatusPollInterval = 5 * time.Second
-	removeBrickStatusPollAttempts = 10
+	removeBrickStatusPollInterval  = 5 * time.Second
+	removeBrickStatusRetryInterval = 20 * time.Second
+	removeBrickStatusRetryAttempts = 30
 )
 
 func (s *CmdExecutor) VolumeCreate(host string,
@@ -473,12 +474,12 @@ func (s *CmdExecutor) waitVolumeRemoveBrickStatus(host string, command string) (
 	for {
 		var b []string
 		var err error
-		for i := 1; i <= removeBrickStatusPollAttempts; i++ {
+		for i := 1; i <= removeBrickStatusRetryAttempts; i++ {
 			b, err = s.RemoteExecutor.RemoteCommandExecute(host, commands, 10)
 			if err == nil {
 				break
 			}
-			time.Sleep(removeBrickStatusPollInterval)
+			time.Sleep(removeBrickStatusRetryInterval)
 		}
 		if err != nil {
 			return "", err
