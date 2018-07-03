@@ -9,8 +9,7 @@ import (
 	"github.com/heketi/heketi/pkg/glusterfs/api"
 )
 
-
-func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Executor) (e error) {
+func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Executor, nodeID string) (e error) {
 
 	errBrickWithEmptyPath := fmt.Errorf("brick has no path")
 
@@ -41,8 +40,8 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 			}
 			return err
 		}
-		logger.Info("Replacing brick %v on device %v on node %v", brickEntry.Id(), brickEntry., d.NodeId)
-		err = volumeEntry.replaceBrickInVolume(db, executor, brickEntry.Id())
+		//logger.Info("Replacing brick %v on device %v on node %v", brickEntry.Id(), brickEntry, d.NodeId)
+		err = volumeEntry.replaceBrickInVolumeExtended(db, executor, brickEntry.Id())
 		if err == ErrNoReplacement {
 			err = volumeEntry.removeBrickFromVolume(db, executor, brickEntry.Id())
 		}
@@ -53,8 +52,8 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 	return nil
 }
 
-func (v *VolumeEntry) replaceBrick(db wdb.DB, executor executors.Executor, oldBrickId string) (e error) {
-	ri, node, err := v.prepForBrickReplacement(
+func (v *VolumeEntry) replaceBrickInVolumeExtended(db wdb.DB, executor executors.Executor, oldBrickId string) (e error) {
+	ri, node, err := v.prepForBrickReplacementExtended(
 		db, executor, oldBrickId)
 	if err != nil {
 		return err
@@ -97,6 +96,15 @@ func (v *VolumeEntry) replaceBrick(db wdb.DB, executor executors.Executor, oldBr
 		return err
 	}
 
+	newNode := newBrickNodeEntry.ManageHostName()
+	err = executor.GlusterdCheck(newNode)
+	if err != nil {
+		newNode, err = GetVerifiedManageHostname(db, executor, newBrickNodeEntry.Info.ClusterId)
+		if err != nil {
+			return err
+		}
+	}
+
 	brickEntries := []*BrickEntry{newBrickEntry}
 	err = CreateBricks(db, executor, brickEntries)
 	if err != nil {
@@ -117,9 +125,22 @@ func (v *VolumeEntry) replaceBrick(db wdb.DB, executor executors.Executor, oldBr
 	newBrick.Path = newBrickEntry.Info.Path
 	newBrick.Host = newBrickNodeEntry.StorageHostName()
 
-	err = executor.VolumeReplaceBrick(node, v.Info.Name, &oldBrick, &newBrick)
-	if err != nil {
-		return err
+	if v.Info.Durability.Type == api.DurabilityDistributeOnly {
+		// For Distribute volume add the new brick and then remove old one
+		err = executor.VolumeAddBrick(newNode, v.Info.Name, &newBrick)
+		if err != nil {
+			return err
+		}
+
+		err = executor.VolumeRemoveBrick(node, v.Info.Name, &oldBrick, 0)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = executor.VolumeReplaceBrick(node, v.Info.Name, &oldBrick, &newBrick)
+		if err != nil {
+			return err
+		}
 	}
 
 	// After this point we should not call any defer func()
@@ -184,7 +205,7 @@ func (v *VolumeEntry) replaceBrick(db wdb.DB, executor executors.Executor, oldBr
 	return nil
 }
 
-func (v *VolumeEntry) removeBrick(db wdb.DB, executor executors.Executor, oldBrickId string) (e error) {
+func (v *VolumeEntry) removeBrickFromVolume(db wdb.DB, executor executors.Executor, oldBrickId string) (e error) {
 	if api.DurabilityReplicate != v.Info.Durability.Type {
 		return fmt.Errorf("remove brick is not allowed for volume durability type %v", v.Info.Durability.Type)
 	}
@@ -267,6 +288,64 @@ type brickItem struct {
 	brickNodeEntry *NodeEntry
 }
 
+func (v *VolumeEntry) prepForBrickReplacementExtended(db wdb.DB,
+	executor executors.Executor,
+	oldBrickId string) (ri replacementItems, node string, err error) {
+
+	var oldBrickEntry *BrickEntry
+	var oldDeviceEntry *DeviceEntry
+	var oldBrickNodeEntry *NodeEntry
+
+	err = db.View(func(tx *bolt.Tx) error {
+		var err error
+		oldBrickEntry, err = NewBrickEntryFromId(tx, oldBrickId)
+		if err != nil {
+			return err
+		}
+
+		oldDeviceEntry, err = NewDeviceEntryFromId(tx, oldBrickEntry.Info.DeviceId)
+		if err != nil {
+			return err
+		}
+		oldBrickNodeEntry, err = NewNodeEntryFromId(tx, oldBrickEntry.Info.NodeId)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return
+	}
+
+	node = oldBrickNodeEntry.ManageHostName()
+	err = executor.GlusterdCheck(node)
+	if err != nil {
+		node, err = GetVerifiedManageHostname(db, executor, oldBrickNodeEntry.Info.ClusterId)
+		if err != nil {
+			return
+		}
+	}
+
+	bs, index, err := v.getBrickSetForBrickId(db, executor, oldBrickId, node)
+	if err != nil {
+		return
+	}
+
+	err = v.canReplaceBrickInBrickSetExtended(db, executor, node, bs, index)
+	if err != nil {
+		return
+	}
+
+	ri = replacementItems{
+		oldBrickEntry:     oldBrickEntry,
+		oldDeviceEntry:    oldDeviceEntry,
+		oldBrickNodeEntry: oldBrickNodeEntry,
+		bs:                bs,
+		index:             index,
+	}
+	return
+}
+
 func (v *VolumeEntry) prepForBrickRemoval(db wdb.DB,
 	executor executors.Executor,
 	oldBrickId string) (bi brickItem, node string, err error) {
@@ -313,3 +392,52 @@ func (v *VolumeEntry) prepForBrickRemoval(db wdb.DB,
 	return
 }
 
+func (v *VolumeEntry) canReplaceBrickInBrickSetExtended(db wdb.DB,
+	executor executors.Executor,
+	node string,
+	bs *BrickSet,
+	index int) error {
+
+	if v.Info.Durability.Type != api.DurabilityDistributeOnly {
+
+		// Get self heal status for this brick's volume
+		healinfo, err := executor.HealInfo(node, v.Info.Name)
+		if err != nil {
+			return err
+		}
+
+		var onlinePeerBrickCount = 0
+		brickId := bs.Bricks[index].Id()
+		bmap, err := v.brickNameMap(db)
+		if err != nil {
+			return err
+		}
+		for _, brickHealStatus := range healinfo.Bricks.BrickList {
+			// Gluster has a bug that it does not send Name for bricks that are down.
+			// Skip such bricks; it is safe because it is not source if it is down
+			if brickHealStatus.Name == "information not available" {
+				continue
+			}
+			iBrickEntry, found := bmap[brickHealStatus.Name]
+			if !found {
+				return fmt.Errorf("Unable to determine heal status of brick")
+			}
+			if iBrickEntry.Id() == brickId {
+				// If we are here, it means the brick to be replaced is
+				// up and running. We need to ensure that it is not a
+				// source for any files.
+				if brickHealStatus.NumberOfEntries != "-" &&
+					brickHealStatus.NumberOfEntries != "0" {
+					return fmt.Errorf("Cannot replace brick %v as it is source brick for data to be healed", iBrickEntry.Id())
+				}
+			}
+			for i, brickInSet := range bs.Bricks {
+				if i != index && brickInSet.Id() == iBrickEntry.Id() {
+					onlinePeerBrickCount++
+				}
+			}
+		}
+	}
+
+	return nil
+}
