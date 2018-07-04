@@ -460,6 +460,12 @@ func (a *App) SetRoutes(router *mux.Router) error {
 			Pattern:     "/volumes/{id:[A-Fa-f0-9]+}/clone",
 			HandlerFunc: a.VolumeClone},
 
+		rest.Route{
+			Name:        "VolumeMigrate",
+			Method:      "POST",
+			Pattern:     "/volumes/{id:[A-Fa-f0-9]+}/migrate",
+			HandlerFunc: a.VolumeMigrate},
+
 		// BlockVolumes
 		rest.Route{
 			Name:        "BlockVolumeCreate",
