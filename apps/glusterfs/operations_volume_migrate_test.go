@@ -5,9 +5,10 @@ import (
 	"testing"
 	"github.com/heketi/heketi/pkg/glusterfs/api"
 
-	"github.com/boltdb/bolt"
 	"github.com/heketi/tests"
 
+	"github.com/boltdb/bolt"
+	"github.com/heketi/heketi/executors"
 )
 
 func TestVolumeMigrateOperation(t *testing.T) {
@@ -19,7 +20,7 @@ func TestVolumeMigrateOperation(t *testing.T) {
 	defer app.Close()
 
 	err := setupSampleDbWithTopology(app,
-		2,    // clusters
+		1,    // clusters
 		3,    // nodes_per_cluster
 		4,    // devices_per_node,
 		6*TB, // disksize)
@@ -41,7 +42,15 @@ func TestVolumeMigrateOperation(t *testing.T) {
 	e = vc.Finalize()
 	tests.Assert(t, e == nil, "expected e == nil, got:", e)
 
+	var nodeID string
+	var node *NodeEntry
 	app.db.View(func(tx *bolt.Tx) error {
+		nl, e := NodeList(tx)
+		tests.Assert(t, e == nil, "expected e == nil, got", e)
+		tests.Assert(t, len(nl) == 3, "expected len(bl) == 3, got:", len(nl))
+		nodeID = nl[0]
+		node, e = NewNodeEntryFromId(tx, nodeID)
+		tests.Assert(t, e == nil, "expected e == nil, got", e)
 		bl, e := BrickList(tx)
 		tests.Assert(t, e == nil, "expected e == nil, got", e)
 		tests.Assert(t, len(bl) == 3, "expected len(bl) == 3, got:", len(bl))
@@ -51,19 +60,29 @@ func TestVolumeMigrateOperation(t *testing.T) {
 		return nil
 	})
 
-	vm := NewVolumeMigrateOperation(vol, app.db, "123")
+	err = node.SetState(app.db, app.executor, api.EntryStateOffline)
+	tests.Assert(t, err == nil, "expected err == nil, got:", err)
+
+	vm := NewVolumeMigrateOperation(vol, app.db, nodeID)
 	e = vm.Build()
 	tests.Assert(t, e == nil, "expected e == nil, got:", e)
 
 	app.db.View(func(tx *bolt.Tx) error {
 		bl, e := BrickList(tx)
 		tests.Assert(t, e == nil, "expected e == nil, got", e)
-		tests.Assert(t, len(bl) == 2, "expected len(bl) == 2, got:", len(bl))
+		tests.Assert(t, len(bl) == 3, "expected len(bl) == 3, got:", len(bl))
 		po, e := PendingOperationList(tx)
 		tests.Assert(t, e == nil, "expected e == nil, got", e)
 		tests.Assert(t, len(po) == 1, "expected len(po) == 1, got:", len(po))
 		return nil
 	})
+
+	app.xo.MockVolumeInfo = func(host string, volume string) (*executors.Volume, error) {
+		return mockVolumeInfoFromDb(app.db, volume)
+	}
+	app.xo.MockHealInfo = func(host string, volume string) (*executors.HealInfo, error) {
+		return mockHealStatusFromDb(app.db, volume)
+	}
 
 	e = vm.Exec(app.executor)
 	tests.Assert(t, e == nil, "expected e == nil, got:", e)

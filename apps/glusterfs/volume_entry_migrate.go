@@ -9,27 +9,21 @@ import (
 	"github.com/heketi/heketi/pkg/glusterfs/api"
 )
 
+// Node should be in offline state before
 func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Executor, nodeID string) (e error) {
 
 	errBrickWithEmptyPath := fmt.Errorf("brick has no path")
 
 	for _, brickId := range v.Bricks {
 		var brickEntry *BrickEntry
-		var volumeEntry *VolumeEntry
 		err := db.View(func(tx *bolt.Tx) error {
 			var err error
 			brickEntry, err = NewBrickEntryFromId(tx, brickId)
 			if err != nil {
 				return err
 			}
-			// Handle the special error case when brick has no path
-			// we skip the brick and continue
 			if brickEntry.Info.Path == "" {
 				return errBrickWithEmptyPath
-			}
-			volumeEntry, err = NewVolumeEntryFromId(tx, brickEntry.Info.VolumeId)
-			if err != nil {
-				return err
 			}
 			return nil
 		})
@@ -40,13 +34,19 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 			}
 			return err
 		}
-		//logger.Info("Replacing brick %v on device %v on node %v", brickEntry.Id(), brickEntry, d.NodeId)
-		err = volumeEntry.replaceBrickInVolumeExtended(db, executor, brickEntry.Id())
+
+		if brickEntry.Info.NodeId != nodeID {
+			continue
+		}
+
+		logger.Info("Replacing brick %s on device %s on node %s", brickEntry.Id(), brickEntry.Info.DeviceId, brickEntry.Info.NodeId)
+
+		err = v.replaceBrickInVolumeExtended(db, executor, brickEntry.Id())
 		if err == ErrNoReplacement {
-			err = volumeEntry.removeBrickFromVolume(db, executor, brickEntry.Id())
+			err = v.removeBrickFromVolume(db, executor, brickEntry.Id())
 		}
 		if err != nil {
-			return logger.Err(fmt.Errorf("Failed to remove device, error: %v", err))
+			return logger.Err(fmt.Errorf("migrate brick %s: %v", brickEntry.Id(), err))
 		}
 	}
 	return nil

@@ -1,11 +1,11 @@
 package glusterfs
 
 const (
-	OperationMigrateVolume PendingOperationType = iota
+	OperationMigrateVolume PendingOperationType = iota + 10
 )
 
 const (
-	OpMigrateVolume PendingChangeType = iota
+	OpMigrateVolume PendingChangeType = iota + 20
 )
 
 func (p *PendingOperationEntry) RecordMigrateVolume(v *VolumeEntry) {
