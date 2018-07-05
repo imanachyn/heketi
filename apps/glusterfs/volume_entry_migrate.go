@@ -16,6 +16,7 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 
 	for _, brickId := range v.Bricks {
 		var brickEntry *BrickEntry
+		var volumeEntry *VolumeEntry
 		err := db.View(func(tx *bolt.Tx) error {
 			var err error
 			brickEntry, err = NewBrickEntryFromId(tx, brickId)
@@ -24,6 +25,10 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 			}
 			if brickEntry.Info.Path == "" {
 				return errBrickWithEmptyPath
+			}
+			volumeEntry, err = NewVolumeEntryFromId(tx, brickEntry.Info.VolumeId)
+			if err != nil {
+				return err
 			}
 			return nil
 		})
@@ -41,13 +46,14 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 
 		logger.Info("Replacing brick %s on device %s on node %s", brickEntry.Id(), brickEntry.Info.DeviceId, brickEntry.Info.NodeId)
 
-		err = v.replaceBrickInVolumeExtended(db, executor, brickEntry.Id())
+		err = volumeEntry.replaceBrickInVolumeExtended(db, executor, brickEntry.Id())
 		if err == ErrNoReplacement {
-			err = v.removeBrickFromVolume(db, executor, brickEntry.Id())
+			err = volumeEntry.removeBrickFromVolume(db, executor, brickEntry.Id())
 		}
 		if err != nil {
 			return logger.Err(fmt.Errorf("migrate brick %s: %v", brickEntry.Id(), err))
 		}
+		v.Bricks = volumeEntry.BricksIds()
 	}
 	return nil
 }
@@ -193,6 +199,7 @@ func (v *VolumeEntry) replaceBrickInVolumeExtended(db wdb.DB, executor executors
 		if err != nil {
 			return err
 		}
+		v.Bricks = reReadVolEntry.BricksIds()
 		return nil
 	})
 	if err != nil {

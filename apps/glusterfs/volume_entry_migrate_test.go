@@ -399,7 +399,7 @@ func TestReplaceBrickInDistributeOnlyVolumeOnOneNode(t *testing.T) {
 		return nil
 	})
 
-	tests.Assert(t, !brickOnOldNode, "brick found on oldNode")
+	tests.Assert(t, brickOnOldNode, "brick not found on oldNode")
 	tests.Assert(t, !oldBrickIdExists, "old Brick not deleted")
 }
 
