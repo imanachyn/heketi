@@ -1,6 +1,7 @@
 package glusterfs
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/boltdb/bolt"
@@ -11,6 +12,22 @@ import (
 
 // Node should be in offline state before
 func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Executor, nodeID string) (e error) {
+	var nodeEntry *NodeEntry
+	err := db.View(func(tx *bolt.Tx) error {
+		var err error
+		nodeEntry, err = NewNodeEntryFromId(tx, nodeID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if nodeEntry.isOnline() {
+		return errors.New("can't migrate bricks from online node")
+	}
 
 	errBrickWithEmptyPath := fmt.Errorf("brick has no path")
 
