@@ -294,6 +294,7 @@ func (v *VolumeEntry) removeBrickFromVolume(db wdb.DB, executor executors.Execut
 		if err != nil {
 			return err
 		}
+		v.Bricks = reReadVolEntry.BricksIds()
 		return nil
 	})
 	if err != nil {
