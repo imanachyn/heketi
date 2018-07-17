@@ -71,6 +71,8 @@ func (v *VolumeEntry) migrateBricksFromNode(db wdb.DB, executor executors.Execut
 			return logger.Err(fmt.Errorf("migrate brick %s: %v", brickEntry.Id(), err))
 		}
 		v.Bricks = volumeEntry.BricksIds()
+		v.Durability = volumeEntry.Durability
+		v.Info.Durability = volumeEntry.Info.Durability
 	}
 	return nil
 }
@@ -295,6 +297,8 @@ func (v *VolumeEntry) removeBrickFromVolume(db wdb.DB, executor executors.Execut
 			return err
 		}
 		v.Bricks = reReadVolEntry.BricksIds()
+		v.Durability = reReadVolEntry.Durability
+		v.Info.Durability = reReadVolEntry.Info.Durability
 		return nil
 	})
 	if err != nil {
