@@ -70,6 +70,13 @@ func (s *CmdExecutor) VolumeRemoveBrick(host string, volume string, brick *execu
 			return err
 		}
 		if status == removeBrickStatusFailed {
+			// Stop
+			commands = []string{command + "stop"}
+			_, stopErr := s.RemoteExecutor.RemoteCommandExecute(host, commands, 10)
+			if stopErr != nil {
+				logger.LogError("unable to stop remove brick %v:%v from volume %v: %v", brick.Host, brick.Path, volume, stopErr)
+			}
+
 			return logger.Err(fmt.Errorf("failed to remove brick %v:%v from volume %v: %v", brick.Host, brick.Path, volume, err))
 		}
 
